@@ -3,7 +3,7 @@ from sqlmodel import select
 from app.database import SessionDep
 from app.models import *
 from app.utilities import flash
-from app.auth import encrypt_password, verify_password, create_access_token, AuthDep
+from app.auth import encrypt_password, verify_password, create_access_token, get_current_user, AuthDep
 from fastapi.security import OAuth2PasswordRequestForm
 from typing import Annotated
 from fastapi import status
@@ -55,7 +55,7 @@ def signup_user(request:Request, db:SessionDep, username: Annotated[str, Form()]
                 )
 
 @auth_router.get("/identify", response_model=UserResponse)
-def get_user_by_id(db: SessionDep, user:AuthDep):
+def get_user_by_id(db: SessionDep, user:AuthDep): # type: ignore
     return user
 
 
@@ -84,3 +84,14 @@ async def logout(request: Request, response: Response):
     )
     
     return response
+
+async def is_logged_in(request: Request, db: SessionDep) -> bool:
+    try:
+        user = await get_current_user(request, db)
+        return True
+    except HTTPException:
+        return False
+
+
+AuthDep = Annotated[User, Depends(get_current_user)]
+IsUserLoggedIn = Annotated[bool, Depends(is_logged_in)]

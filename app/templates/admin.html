@@ -1,0 +1,155 @@
+{% extends "layout.html" %}
+{% block title %}Admin View{% endblock %}
+{% block page %}Admin View{% endblock %}
+
+{% block link%}
+<ul id="nav-mobile" class="right">
+  <li><a href="/todo-stats">Stats</a></li>
+  <li><a href="/logout">Logout</a></li>
+</ul>
+{% endblock %}
+
+{% block styles %}
+
+{% endblock %}
+
+{% block content %}
+<main class="container" style="padding-top:100px">
+
+
+  <form method="GET" action="/admin">
+    <div class="row">
+      <div class="col m10 input-field">
+        <input class="blue-text" name="q" type="search" placeholder="Search" value="{{q}}">
+      </div>
+      <div class="col m2 input-field">
+        <div class="row">
+          <button type="submit" class="btn blue">
+            <i class="material-icons">search</i>
+          </button>
+          <button type="button" onclick="q.value=''; this.form.submit()" class="btn blue">
+            <i class="material-icons">close</i>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>User</th>
+        <th>Text</th>
+        <th>Done</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for todo in todos %}
+      <tr>
+        <td>{{todo.id}}</td>
+        <td>{{todo.user.username}}</td>
+        <td>{{todo.text}}</td>
+        <td>{{todo.done}}</td>
+      </tr>
+      {% endfor %}
+
+    </tbody>
+  </table>
+
+  <div class="row" style="display: flex; align-items: center; justify-content: center; position: relative;">
+
+    <ul class="pagination" style="margin: 0;">
+      {% if pagination.has_prev %}
+      <li class="waves-effect">
+        <a href="{{ url_for('admin_page') }}?page={{ pagination.prev_num }}&limit={{ pagination.limit}}&q={{ q }}">
+          <i class="material-icons">chevron_left</i>
+        </a>
+      </li>
+      {% else %}
+      <li class="disabled">
+        <a href="#!"><i class="material-icons">chevron_left</i></a>
+      </li>
+      {% endif %}
+
+      {% for page_num in pagination.iter_pages() %}
+      {% if page_num %}
+      {% if pagination.page == page_num %}
+      <li class="active blue"><a href="#!">{{ page_num }}</a></li>
+      {% else %}
+      <li class="waves-effect">
+        <a href="{{ url_for('admin_page') }}?page={{ page_num }}&limit={{ pagination.limit }}&q={{ q }}">{{ page_num }}</a>
+      </li>
+      {% endif %}
+      {% else %}
+      <li class="disabled"><a href="#!">...</a></li>
+      {% endif %}
+      {% endfor %}
+
+      {% if pagination.has_next %}
+      <li class="waves-effect">
+        <a href="{{ url_for('admin_page') }}?page={{ pagination.next_num }}&limit={{ pagination.limit }}&q={{ q }}">
+          <i class="material-icons">chevron_right</i>
+        </a>
+      </li>
+      {% else %}
+      <li class="disabled">
+        <a href="#!"><i class="material-icons">chevron_right</i></a>
+      </li>
+      {% endif %}
+    </ul>
+
+    <div class="input-field" style="position: absolute; right: 25px; margin: 0; ">
+      <select id="limit-select" onchange="location = this.value;">
+        {% for n in [10, 25, 50, 100] %}
+        <option value="{{ url_for('admin_page') }}?page=1&limit={{ n }}&q={{ q }}" {% if pagination.limit==n %}selected{% endif
+          %}>
+          {{ n }} rows
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+</main>
+{% endblock %}
+Task 5.1
+Update the admin_page function to take a done parameter which can be "true", "false" or "any" and filter the result based on the value.
+
+@admin_router.get("/admin")
+def admin_page(request:Request, db:SessionDep, user:AdminDep, page: int = Query(default=1, ge=1), limit: int = Query(default=100, le=100), q: str = Query(default=''), done:str =  Query(default="any")):
+    offset = (page - 1) * limit
+
+    db_qry = select(Todo).join(User)
+    if q:
+        db_qry = db_qry.where(
+            Todo.text.ilike(f"%{q}%") | User.username.ilike(f"%{q}%")
+        )
+    if done == "true": #note the string here
+        db_qry = db_qry.where(
+            Todo.done == True
+        )
+    elif done == "false": 
+        db_qry = db_qry.where(
+            Todo.done == False
+        )
+    # Note that we on'y really care if "done" is true/false, anything else we ignore
+    count_qry = select(func.count()).select_from(db_qry.subquery())
+    count_todos = db.exec(count_qry).one()
+
+    todos = db.exec(db_qry.offset(offset).limit(limit)).all()
+    pagination = Pagination(total_count=count_todos, current_page=page, limit=limit)
+
+    return templates.TemplateResponse(
+        request=request, 
+        name="admin.html",
+        context={
+            "current_user": user,
+            "todos": todos,
+            "pagination": pagination,
+            "q":q,
+            "done": done
+        }
+    )
